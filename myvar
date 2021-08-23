@@ -1,0 +1,9 @@
+.gitignore
+CudaDiplomski.sln
+CudaDiplomski.vcxproj
+CudaDiplomski.vcxproj.user
+kernel.cu
+myvar
+script.bat
+utils.cpp
+utils.h
