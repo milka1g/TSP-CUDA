@@ -21,7 +21,7 @@ using namespace std;
 #define REAL_PERM 13 //max size we will need for cuda
 #define THREAD_BLOCKS 1871100 //12! / 256 = 479001600/256 = 1871100
 
-__constant__ float distanceMap[REAL_PERM][REAL_PERM];
+__constant__ float distanceMap[REAL_PERM + 2][REAL_PERM + 2];
 
 int next_permutation(const int N, int* P) {
 	int s;
@@ -83,7 +83,7 @@ int* permCPU(unsigned long long m)
 	int* permuted = new int[REAL_PERM];
 	int* elems = new int[REAL_PERM];
 
-	for (i = 0; i < REAL_PERM; i++) elems[i] = i;
+	for (i = 0; i < REAL_PERM; i++) elems[i] = i + 1;  //first and last hole is fixed, we permute the numHoles-2 in between
 
 	for (i = 0; i < REAL_PERM; i++)
 	{
@@ -110,7 +110,7 @@ __global__ void kernelReduce(float* distance, unsigned long long* step, unsigned
 		unsigned int elems[REAL_PERM];
 		float len = 0;
 
-		for (i = 0; i < REAL_PERM; i++) elems[i] = i;
+		for (i = 0; i < REAL_PERM; i++) elems[i] = i + 1; //first and last hole is fixed, we permute the numHoles-2 in between
 
 		for (i = 0; i < REAL_PERM; i++)
 		{
@@ -120,8 +120,10 @@ __global__ void kernelReduce(float* distance, unsigned long long* step, unsigned
 			elems[ind] = elems[REAL_PERM - i - 1];
 		}
 
+		len = len + distanceMap[0][permuted[0]];
 		for (i = 0; i < REAL_PERM - 1; i++)
 			len = len + distanceMap[permuted[i]][permuted[i + 1]];
+		len = len + distanceMap[permuted[REAL_PERM - 1]][REAL_PERM + 1];
 
 		distances[tid] = len;
 		realindex[tid] = id;
@@ -151,10 +153,13 @@ int main(int argc, char* argv[]) {
 
 	string fileName = argv[1];
 	int numHoles = 0;
+	int num_holes = 0; //from file first line check if correct
 	try {
 		std::ifstream file("C:\\Users\\mn170387d\\Desktop\\clusters\\" + fileName);
 		std::string str;
 		std::getline(file, str);
+		std::istringstream in(str);
+		in >> num_holes;
 		while (std::getline(file, str)) {
 			std::istringstream in(str);
 			float x, y;
@@ -168,6 +173,9 @@ int main(int argc, char* argv[]) {
 	catch (const std::exception&) {
 		cout << "File doesn't exist!";
 	}
+
+	if (num_holes == numHoles) //we read from second to second last
+		std::cout << "Numbers of holes are good: " << num_holes << '\n';
 
 	//compute distances
 	vector<vector<float>> distances(numHoles, vector<float>(numHoles));
@@ -183,41 +191,45 @@ int main(int argc, char* argv[]) {
 	}
 
 	//cout << "BR RUPA: " << numHoles << endl;
-		
-	if (numHoles <= 12) { //no need to do CUDA
-		auto start = std::chrono::high_resolution_clock::now();
 
+	if (numHoles <= 14) { //no need to do CUDA
+		auto start = std::chrono::high_resolution_clock::now();
+		int permSize = numHoles - 2; //0 1..11 12 for 13==numHoles
 		float shortestPathLength = FLT_MAX;
 		float currCost = 0.0f;
-		int* P = new int[numHoles];
-		for (int i = 0; i < numHoles; i++) {
-			P[i] = i; //holes from 1-numHoles
+		int* P = new int[permSize];
+		for (int i = 0; i < permSize; i++) {
+			P[i] = i + 1; 
 		}
-
+	
 		do {
 			currCost = 0.0f;
-			for (int i = 0; i < numHoles - 1; i++) {
-				currCost += distances[P[i]][P[i+1]];
+			currCost += distances[0][P[0]];
+			for (int i = 0; i < permSize - 1; i++) {
+				currCost += distances[P[i]][P[i + 1]];
 			}
-
+			currCost += distances[P[permSize - 1]][numHoles - 1];
 			if (currCost < shortestPathLength) {
 				shortestPathLength = currCost;
-				for (int i = 0; i < numHoles; i++) {
-					bestPerm[i] = P[i]+1;
+				for (int i = 0; i < permSize ; i++) {
+					bestPerm[i] = P[i];
 				}
 			}
-		} while (next_permutation(numHoles, P));
+		} while (next_permutation(permSize, P));
 
 		cout << "Best cost: " << fixed << shortestPathLength << " mm.\n" << endl;
 
 		ofstream out;
 		out.open("C:\\Users\\mn170387d\\Desktop\\clusters\\solved" + fileName);
-		cout << "Best path is: ";
-		for (int i = 0; i < numHoles; i++) {
+		out << numHoles << '\n';
+		out << holes[0][0] << ' ' << holes[0][1] << " 0" << '\n';
+		for (int i = 0; i < permSize; i++) {
 			cout << bestPerm[i] << " ";
-			out << bestPerm[i] << '\n';
+			out << holes[i + 1][0] << ' ' << holes[i + 1][1] << ' ' << bestPerm[i] << '\n';
 		}
+		out << holes[numHoles - 1][0] << ' ' << holes[numHoles - 1][1] << ' ' << numHoles - 1;
 		out.close();
+
 		auto end = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double, std::milli> duration = end - start;
 		cout << "Time elapsed: " << duration.count() << "ms\n";
@@ -225,16 +237,16 @@ int main(int argc, char* argv[]) {
 	else { //doing cuda for 12+
 		auto start = std::chrono::high_resolution_clock::now();
 		//must copy contiguous arr to device 
-		float distancesCont[REAL_PERM][REAL_PERM];
+		float distancesCont[REAL_PERM + 2][REAL_PERM + 2]; //first and last hole are fixed
 		for (int i = 0; i < numHoles; i++) {
 			for (int j = 0; j < numHoles; j++) {
 				distancesCont[i][j] = distances[i][j];
 			}
 		}
-		
+
 		cudaError_t err;
 		// 
-		err = cudaMemcpyToSymbol(distanceMap, distancesCont, REAL_PERM * REAL_PERM * sizeof(float), 0, cudaMemcpyHostToDevice);
+		err = cudaMemcpyToSymbol(distanceMap, distancesCont, (REAL_PERM + 2) * (REAL_PERM + 2) * sizeof(float), 0, cudaMemcpyHostToDevice);
 		if (err != cudaSuccess) {
 			std::cout << "Copying distanceMap failed\n";
 		}
@@ -297,13 +309,17 @@ int main(int argc, char* argv[]) {
 		float newmin = 0;
 		int* rez = permCPU(bestind);
 
+		newmin += distancesCont[0][rez[0]];
 		for (int i = 0; i < REAL_PERM - 1; i++)
 			newmin = newmin + distancesCont[rez[i]][rez[i + 1]];
+		newmin += distancesCont[rez[REAL_PERM - 1]][REAL_PERM + 1];
 
 		std::cout << "Best path is:\n";
+		std::cout << 0 << " ";
 		for (int i = 0; i < REAL_PERM; i++) {
 			std::cout << rez[i] + 1 << " ";
 		}
+		std::cout << REAL_PERM + 1 << " ";
 		std::cout << std::endl;
 
 
@@ -315,9 +331,12 @@ int main(int argc, char* argv[]) {
 
 		ofstream out;
 		out.open("C:\\Users\\mn170387d\\Desktop\\clusters\\solved" + fileName);
+		out << numHoles << '\n';
+		out << holes[0][0] << ' ' << holes[0][1] << " 0" << '\n';
 		for (int i = 0; i < REAL_PERM; i++) {
-			out << rez[i]+1 << '\n';
+			out << holes[i + 1][0] << ' ' << holes[i + 1][1] << ' ' << rez[i] << '\n';
 		}
+		out << holes[numHoles - 1][0] << ' ' << holes[numHoles - 1][1] << ' ' << numHoles - 1 << '\n';
 		out.close();
 
 		cudaFree(d_distance);
