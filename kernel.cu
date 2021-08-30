@@ -224,7 +224,6 @@ int main(int argc, char* argv[]) {
 		out << numHoles << '\n';
 		out << holes[0][0] << ' ' << holes[0][1] << " 0" << '\n';
 		for (int i = 0; i < permSize; i++) {
-			cout << bestPerm[i] << " ";
 			out << holes[i + 1][0] << ' ' << holes[i + 1][1] << ' ' << bestPerm[i] << '\n';
 		}
 		out << holes[numHoles - 1][0] << ' ' << holes[numHoles - 1][1] << ' ' << numHoles - 1;
