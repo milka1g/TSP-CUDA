@@ -1,0 +1,19 @@
+# Cluster: Cluster 11
+# Cluster name: Cluster
+# Cluster noise flag: false
+# Cluster size: 13
+# Model class: de.lmu.ifi.dbs.elki.data.model.MeanModel
+# Cluster Mean: 85.06138461538463, -30.761076923076917
+ID=10488 65.786 -24.892
+ID=10481 75.398 -45.99
+ID=10482 75.43 -38.06
+ID=10483 81.494 -25.924
+ID=10486 87.336 -19.32
+ID=10487 87.336 -29.48
+ID=10485 81.494 -20.844
+ID=10484 81.494 -23.384
+ID=10456 94.006 -44.4
+ID=10455 94.006 -39.4
+ID=10454 94.006 -34.4
+ID=10452 94.006 -24.4
+ID=10453 94.006 -29.4
